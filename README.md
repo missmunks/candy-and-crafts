@@ -1,0 +1,1 @@
+Deploy: Drag this folder's contents to Netlify. Set env vars: DATABASE_URL, PGSSLMODE=require, ADMIN_TOKEN, and email/SMS vars if needed. Root has netlify.toml; functions in netlify/functions. Public form at '/', admin at '/admin'.

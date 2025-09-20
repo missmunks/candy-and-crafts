@@ -1,0 +1,13 @@
+import { query, ensureSchema } from './_db_util.js'; import nodemailer from 'nodemailer'; import twilio from 'twilio';
+function randomCode(l=6){const c='23456789ABCDEFGHJKLMNPQRSTUVWXYZ';let o='';for(let i=0;i<l;i++)o+=c[Math.floor(Math.random()*c.length)];return o;}
+export const handler = async (event)=>{try{await ensureSchema();const d=JSON.parse(event.body||'{}');const{fullName,email,mobile,signature,channel,fingerprint}=d;
+if(!fullName||!signature||!channel)return{statusCode:400,body:JSON.stringify({ok:false,error:'Missing fields'})};
+if(channel==='sms'&&!mobile)return{statusCode:400,body:JSON.stringify({ok:false,error:'Mobile required'})};
+if(channel==='email'&&!email)return{statusCode:400,body:JSON.stringify({ok:false,error:'Email required'})};
+const ins=await query(`INSERT INTO attendees(name,email,mobile) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id`,[fullName,email||null,mobile||null]);
+let attendeeId=ins.rows[0]?.id;if(!attendeeId){const lu=await query(`SELECT id FROM attendees WHERE (email=$1 AND $1 IS NOT NULL) OR (mobile=$2 AND $2 IS NOT NULL) ORDER BY id DESC LIMIT 1`,[email||null,mobile||null]);attendeeId=lu.rows[0]?.id;}
+const code=randomCode(6);const contact=channel==='sms'?mobile:email;const payload={attendeeId,fullName,email,mobile,signature,fingerprint,waiver_version:'v7'};const exp=new Date(Date.now()+600000).toISOString();
+await query(`INSERT INTO verifications(contact,channel,code,payload,expires_at) VALUES($1,$2,$3,$4,$5)`,[contact,channel,code,payload,exp]);
+if(channel==='email'){if(process.env.SMTP_HOST||process.env.SENDGRID_API_KEY){let t;if(process.env.SMTP_HOST){t=nodemailer.createTransport({host:process.env.SMTP_HOST,port:+(process.env.SMTP_PORT||587),secure:false,auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASS}});}else{t=nodemailer.createTransport({host:'smtp.sendgrid.net',port:587,auth:{user:'apikey',pass:process.env.SENDGRID_API_KEY}});}await t.sendMail({from:process.env.FROM_EMAIL||'no-reply@example.com',to:email,subject:'Your RSVP Verification Code',text:`Your verification code is: ${code}`});}}
+else if(channel==='sms'){if(process.env.TWILIO_SID){const client=twilio(process.env.TWILIO_SID,process.env.TWILIO_AUTH);await client.messages.create({from:process.env.TWILIO_FROM,to:mobile,body:`Your RSVP verification code is: ${code}`});}}
+return{statusCode:200,body:JSON.stringify({ok:true})};}catch(e){console.error(e);return{statusCode:500,body:JSON.stringify({ok:false,error:e.message})}}};

@@ -1,0 +1,5 @@
+{
+  "name":"event-waiver-rsvp","private":true,"type":"module",
+  "scripts":{"dev":"netlify dev","build":"echo 'No build step required'"},
+  "dependencies":{"pg":"^8.11.5","nodemailer":"^6.9.8","twilio":"^4.21.0"}
+}
